@@ -13,6 +13,8 @@ output:
 library(scales)
 library(tidyverse)
 library(knitr)
+library(ggplot2)
+library(patchwork)
 
 # set plot theme
 theme_set(theme_bw())
@@ -35,6 +37,10 @@ head(ratings) %>% kable()
 
 ```{r dist-ratings}
 # plot the distribution of rating values https://speakerdeck.com/jhofman/modeling-social-data-lecture-2-introduction-to-counting?slide=26
+
+ratings |> ggplot(aes(x = rating)) + geom_histogram(binwidth = 0.5, fill = "skyblue", color = "white") + 
+labs(x = "Rating" , y = "Number of Ratings", title = "How many ratings are there at each level?") + 
+scale_y_continuous(labels = scales::comma)
 ```
 
 ## Per-movie stats
@@ -42,16 +48,53 @@ head(ratings) %>% kable()
 ```{r aggregate-by-movie}
 # aggregate ratings by movie, computing mean rating and number of ratings
 # hint: use the n() function for easy counting within a group
+
+movie_summary <- ratings |> group_by(movie_id) |> summarise(mean_rating = mean(rating), num_ratings = n()) |> 
+arrange(desc(num_ratings))
+
+view(movie_summary)
 ```
 
 ```{r dist-movie-popularity}
 # plot distribution of movie popularity (= number of ratings the movie received)
 # hint: try scale_x_log10() for a logarithmic x axis
+
+movie_summary |> ggplot(aes(x = num_ratings)) + 
+geom_histogram() +  
+scale_x_log10() +
+labs(
+  title = "Distribution of Movie popularity", 
+  x = "Number of Ratings", 
+  y = "Number of Movies"
+) 
 ```
 
 ```{r dist-mean-ratings-by-movie}
 # plot distribution of mean ratings by movie https://speakerdeck.com/jhofman/modeling-social-data-lecture-2-introduction-to-counting?slide=28
 # hint: try geom_histogram and geom_density
+
+
+hist_plot <- movie_summary |> ggplot(aes(x = mean_rating)) + 
+geom_histogram(alpha = 0.7) +  
+labs(
+  title = "Distribution of mean ratings by movie", 
+  x = "Mean Rating by Movie", 
+  y = "Number of Movies"
+) 
+
+density_plot <- movie_summary |> ggplot(aes(x = mean_rating)) + 
+geom_density(fill = "#232222", size = 1) 
+labs(
+  title = "Distribution of mean ratings by movie", 
+  x = "Mean Rating by Movie", 
+  y = "Number of Movies"
+) 
+
+
+hist_plot + density_plot
+
+
+
 ```
 
 ```{r cdf-movie-pop}
@@ -59,7 +102,30 @@ head(ratings) %>% kable()
 # hint: use dplyr's rank and arrange functions, and the base R sum and cumsum functions
 # store the result in a new data frame so you can use it in creating figure 2 from the paper below
 
+
+#rank movies by popularity & CDF part 
+
+movie_cdf <- movie_summary |> arrange(desc(num_ratings)) |> 
+mutate(
+  rank = row_number(), 
+  cum_ratings = cumsum(num_ratings),  # cumulative sum of number of ratings 
+  total_ratings = sum(num_ratings), # This is a constant anyway because we know how many ratings we got overall
+  cdf = cum_ratings / total_ratings
+)
+
 # plot the CDF of movie popularity
+
+movie_cdf |> ggplot(aes(x = rank, y = cdf)) + 
+geom_line(size = 1) +
+scale_y_continuous(labels = label_percent())+
+labs(
+  title = "What fraction of ratings are given to the most popular movies?", 
+  x = "Rank", 
+  y = "CDF"
+)
+
+
+
 ```
 
 
@@ -67,11 +133,22 @@ head(ratings) %>% kable()
 
 ```{r aggregate-by-user}
 # aggregate ratings by user, computing mean and number of ratings
+user_summary <- ratings |> group_by(user_id) |> summarise(mean_rating = mean(rating), num_ratings = n()) |> 
+arrange(desc(num_ratings))
+view(user_summary)
 ```
 
 ```{r dist-user-activity}
 # plot distribution of user activity (= number of ratings the user made)
 # hint: try a log scale here
+
+user_summary |> ggplot(aes(x = num_ratings)) + 
+geom_histogram() + 
+scale_x_log10()+
+labs(
+  title = "Distribution of user activity", 
+  x = "Number of ratings by users", 
+)
 ```
 
 # Anatomy of the long tail
@@ -91,4 +168,83 @@ head(ratings) %>% kable()
 # paper, produce one curve for the 100% user satisfaction level and
 # another for 90%---do not, however, bother implementing the null
 # model (shown in the dashed lines).
+
+view(movie_cdf)
+head(ratings, 50)
+
+total_number_of_users = n_distinct(ratings$user_id)
+print(total_number_of_users)
+
+
+movie_summary_with_rank <- ratings |> group_by(movie_id) |> summarise(mean_rating = mean(rating), num_ratings = n()) |> 
+arrange(desc(num_ratings))
+
+
+movie_summary_with_rank <- movie_summary_with_rank |> mutate(rank = row_number())
+
+view(movie_summary_with_rank)
+
+
+user_movies <- ratings |> group_by(user_id)
+
+
+total_users_movies_rank <- left_join(user_movies, movie_summary_with_rank, by ="movie_id")
+
+user_weirdest_movie_rank <- total_users_movies_rank |> group_by(user_id) |> summarise(rank_of_weirdes_movie = max(rank)) |> arrange(rank_of_weirdes_movie)
+
+view(user_weirdest_movie_rank)
+
+number_of_users_watch_this_weird_movie <- user_weirdest_movie_rank |> group_by(rank_of_weirdes_movie) |> summarise(number_users_for_100 = n())
+
+view(number_of_users_watch_this_weird_movie)
+
+
+satisfied_customers <- number_of_users_watch_this_weird_movie |> 
+mutate(
+  satisfied_customers_num_for_100 = cumsum(number_users_for_100),
+  satisfied_customers_num_percent_for_100 = satisfied_customers_num_for_100 /total_number_of_users
+)
+
+view(satisfied_customers)
+
+satisfied_customers |> ggplot(aes(x = rank_of_weirdes_movie, y =  satisfied_customers_num_percent_for_100)) + geom_line()
+
+
+
+#Start the 90% satisfaction rate 
+
+total_users_movies_rank <- left_join(user_movies, movie_summary_with_rank, by ="movie_id")
+
+ninety_qunatile_try <- total_users_movies_rank |> group_by(user_id) |> summarise(ninety_qunatile = quantile(rank, 0.9)) |> arrange(ninety_qunatile)
+
+
+number_of_user_watch_this_ninety <- ninety_qunatile_try |> group_by(ninety_qunatile) |> summarise(number_users_ninety = n())
+
+view(number_of_user_watch_this_ninety)
+
+satisfied_customers_ninety_percent <- number_of_user_watch_this_ninety |> 
+mutate(
+  satisfied_customers_num_for_90 = cumsum(number_users_ninety),
+  satisfied_customers_num_percent_for_90 = satisfied_customers_num_for_90 /total_number_of_users
+)
+
+view(satisfied_customers_ninety_percent)
+
+satisfied_customers_ninety_percent |> ggplot(aes(x = ninety_qunatile, y =  satisfied_customers_num_percent_for_90)) + geom_line()
+
+
+
+#final_graph 
+
+ggplot() +
+geom_line(data = satisfied_customers_ninety_percent, aes(x = ninety_qunatile, y =  satisfied_customers_num_percent_for_90, color = "90% Satisfaction"), size = 1) + 
+geom_line(data = satisfied_customers, aes(x = rank_of_weirdes_movie, y =  satisfied_customers_num_percent_for_100, color = "100% Satisfaction"), size = 1) + 
+scale_color_manual(values = c("100% Satisfaction" = "Blue", "90% Satisfaction" = " red")) + 
+labs(color = "Level of Satisfaction")
+
+
+
+
+
+
 ```
