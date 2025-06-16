@@ -180,6 +180,7 @@ movie_summary_with_rank <- ratings |> group_by(movie_id) |> summarise(mean_ratin
 arrange(desc(num_ratings))
 
 
+
 movie_summary_with_rank <- movie_summary_with_rank |> mutate(rank = row_number())
 
 view(movie_summary_with_rank)
@@ -207,7 +208,11 @@ mutate(
 
 view(satisfied_customers)
 
-satisfied_customers |> ggplot(aes(x = rank_of_weirdes_movie, y =  satisfied_customers_num_percent_for_100)) + geom_line()
+satisfied_customers |> ggplot(aes(x = rank_of_weirdes_movie, y =  satisfied_customers_num_percent_for_100)) + geom_line()+ 
+labs(
+  x = "Inventory Size", 
+  y = "Percent of the user"
+)
 
 
 
@@ -230,9 +235,11 @@ mutate(
 
 view(satisfied_customers_ninety_percent)
 
-satisfied_customers_ninety_percent |> ggplot(aes(x = ninety_qunatile, y =  satisfied_customers_num_percent_for_90)) + geom_line()
-
-
+satisfied_customers_ninety_percent |> ggplot(aes(x = ninety_qunatile, y =  satisfied_customers_num_percent_for_90)) + geom_line() +
+labs(
+  x = "Inventory Size", 
+  y = "Percent of the user"
+)
 
 #final_graph 
 
@@ -240,7 +247,11 @@ ggplot() +
 geom_line(data = satisfied_customers_ninety_percent, aes(x = ninety_qunatile, y =  satisfied_customers_num_percent_for_90, color = "90% Satisfaction"), size = 1) + 
 geom_line(data = satisfied_customers, aes(x = rank_of_weirdes_movie, y =  satisfied_customers_num_percent_for_100, color = "100% Satisfaction"), size = 1) + 
 scale_color_manual(values = c("100% Satisfaction" = "Blue", "90% Satisfaction" = " red")) + 
-labs(color = "Level of Satisfaction")
+labs(color = "Level of Satisfaction") + 
+labs(
+  x = "Inventory Size", 
+  y = "Percent of the user"
+)
 
 
 
