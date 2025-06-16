@@ -101,7 +101,7 @@ contrasts(ShelveLoc) # Shows the coding in R for qualitative variables
 
 # Exercises 6.1
 
-babyweights <- read.table('D:/coursework/week3/babyweights.txt', header = TRUE,  sep = '	',  stringsAsFactors = FALSE)
+babyweights <- read.table('D:/coursework/week3/babyweights.txt')
 view(babyweights)
 
 # Question a) 
@@ -205,3 +205,94 @@ lm.fit3 <- lm(bwt ~ ., data = babyweights)
 summary(lm.fit3)
 
 
+#-------------------------------------------------------------------
+# Lab 5.3.1 The Validation Set Approach
+
+#set.seed() function in order to set a seed for seed R’s random number generator
+install.packages('ISLR2')
+library(ISLR2)
+set.seed(1)
+train <- sample(392, 196) #sample is for splitting the data into havles 
+lm.fit <- lm(mpg ~ horsepower , data = Auto, subset = train) # model between mpg and horsepower 
+summary(lm.fit)
+
+#The mean() function to calculate the MSE of the 196 observations in the validation set
+
+attach(Auto)
+mean((mpg - predict(lm.fit, Auto))[-train]^2)
+
+lm.fit2 <- lm(mpg ~ poly(horsepower , 2), data = Auto, subset = train)
+
+mean((mpg - predict(lm.fit2, Auto))[-train]^2) # get the MSE for this model 
+
+lm.fit3 <- lm(mpg ~ poly(horsepower , 3), data = Auto, subset = train)
+
+summary(lm.fit3)
+
+mean((mpg - predict(lm.fit3, Auto))[-train]^2)
+
+set.seed(2)
+train <- sample(392, 196)
+
+lm.fit <- lm(mpg ~ horsepower , subset = train)
+
+mean((mpg - predict(lm.fit, Auto))[-train]^2)
+
+lm.fit2 <- lm(mpg ~ poly(horsepower , 2), data = Auto, subset = train)
+summary(lm.fit2)
+mean((mpg - predict(lm.fit2 , Auto))[-train]^2)
+
+lm.fit3 <- lm(mpg ~ poly(horsepower , 3), data = Auto, subset = train)
+
+mean((mpg - predict(lm.fit3, Auto))[-train]^2)
+
+#-------------------------------------------------------------------
+# Lab 5.3.2 The Validation Set Approach
+
+#  LOOCV (Leave-One-Out Cross-Validation) estimate can be automatically computed for any generalized linear model using the glm() and cv.glm() functions
+
+glm.fit <- glm(mpg ~ horsepower , data = Auto) # this just work as lm 
+summary(glm.fit)
+coef(glm.fit) # give coffient and slope for the variables in the model 
+
+# Just to prove the idea that glm in this case works as lm 
+
+lm.fit <- lm(mpg ~ horsepower , data = Auto)
+summary(lm.fit)
+coef(lm.fit)
+
+# Final Notes: 
+
+# glm is more for generalized linear model when we specify a family argument. Ex: family = binomial 
+# lm is for linear models
+# cv.glm() is used to perform cross-validation for generalized linear models.
+
+
+library(boot)
+glm.fit <- glm(mpg ~ horsepower , data = Auto)
+summary(glm.fit)
+coef(glm.fit)
+cv.err <- cv.glm(Auto, glm.fit)
+cv.err$delta
+
+
+cv.error <- rep(0, 10)
+for (i in 1:10) {
+glm.fit <- glm(mpg ~ poly(horsepower , i), data = Auto)
+cv.error[i] <- cv.glm(Auto, glm.fit)$delta[1]
+}
+
+cv.error
+
+#-------------------------------------------------------------------
+# Lab 5.3.3 The Validation Set Approach
+
+#The cv.glm() function can also be used to implement k-fold CV
+
+set.seed(17)
+cv.error.10 <- rep(0, 10)
+for (i in 1:10) {
+ glm.fit <- glm(mpg ~ poly(horsepower , i), data = Auto)
+ cv.error.10[i] <- cv.glm(Auto, glm.fit, K = 10)$delta[1]
+ }
+cv.error.10 # to get the error for our models 
