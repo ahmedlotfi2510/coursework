@@ -15,6 +15,7 @@ output:
 library(here)
 library(scales)
 library(tidyverse)
+library(ggplot2)
 
 theme_set(theme_bw())
 
@@ -53,12 +54,31 @@ Load in the `year_counts.tsv` and `total_counts.csv` files. Use the `here()` fun
 
 ```{r load-counts}
 
+total_counts_r <- read_csv('total_counts.csv',
+                    col_names = c('year','total_volume','page_count','book_count'))
 
+
+year_counts_r <- read_tsv('year_counts.tsv', 
+              col_names = c('term', 'year', 'volume', 'book_count'))
 ```
 
 ## Your written answer
 
 Add a line below using Rmarkdown's inline syntax to print the total number of lines in each dataframe you've created.
+
+```{r number_lines}
+
+number_lines_in_total_file = nrow(total_counts_r)
+
+number_lines_in_years_file = nrow(year_counts_r)
+
+print(paste("Total number of lines in total counts: " , number_lines_in_total_file))
+
+print(paste("Total number of lines in years file: " , number_lines_in_years_file))
+
+
+```
+
 
 # Part B
 
@@ -70,6 +90,18 @@ Join the raw year term counts with the total counts and divide to get a proporti
 
 ```{r join-years-and-totals}
 
+head(total_counts_r)
+
+years_and_total <- left_join(year_counts_r, total_counts_r, by = "year")
+
+
+
+years_and_total <-  years_and_total |> mutate(
+  proportions = volume / total_volume
+)
+
+head(years_and_total)
+
 
 ```
 
@@ -79,11 +111,25 @@ Plot the proportion of mentions for the terms "1883", "1910", and "1950" over ti
 
 ```{r plot-proportion-over-time}
 
+
+years_and_total <- years_and_total |> filter(term == "1883" | term == "1910" | term == "1950") |> filter(year >= "1850" & year <= "2012")
+
+head(years_and_total)
+
+years_and_total |> ggplot(aes(x =  year, y = proportions * 10000, color = term)) + geom_line() +
+labs(
+  x = "Year", 
+  y = "Frequency"
+)
+
 ```
 
 ## Your written answer
 
 Write up your answer to Part B here.
+
+In our graph which is based on version 2, the peaks are a little bit higher than the lines in graph on the Ngram viewer, especially 1950. Also, from what I see is that the graph in our version starts right before the year itself not 10 years compared to the graph in the Ngram version.  
+
 
 # Part C
 
@@ -92,6 +138,10 @@ Write up your answer to Part B here.
 ## Compare to the NGram Viewer
 
 Go to the ngram viewer, enter the terms "1883", "1910", and "1950" and take a screenshot.
+
+`![](ngrams 1883.png)`
+
+Added to what I am menioned in part b, the scales are different on y-axis
 
 ## Your written answer
 
@@ -108,6 +158,15 @@ Plot the raw counts for the terms "1883", "1910", and "1950" over time from 1850
 
 ```{r plot-raw-mentions-over-time}
 
+head(years_and_total)
+
+years_and_total |> ggplot(aes(x =  year, y = volume , color = term)) + geom_line() +
+scale_y_continuous(labels = comma) +
+labs(
+  x = "Year", 
+  y = "Frequency"
+)
+
 ```
 
 # Part E
@@ -122,11 +181,28 @@ Plot the total counts for each year over time, from 1850 to 2012. Use the `comma
 
 ```{r plot-totals}
 
+view(total_counts_r)
+
+total_counts_r_filtered <- total_counts_r |> filter(year >= "1850" & year <= "2012")
+
+
+
+view(total_counts_r_filtered)
+
+total_counts_r_filtered |> ggplot(aes(x =  year, y = total_volume)) + geom_line() +
+scale_y_continuous(labels = comma) +
+labs(
+  x = "Year", 
+  y = "Total count"
+)
+
 ```
 
 ## Your written answer
 
 Write up your answer to Part E here.
+
+Yes, this leads to reevaluate any of the results of Michel et al. (2011). I believe now that the people are not forgetting about the year based on this graph. There is a upward trend across the different the three lines for the three years after they reach the peak and go down a little bit. 
 
 # Part F
 
@@ -138,6 +214,43 @@ For each year term, find the year where its proportion of mentions peaks (hits i
 
 ```{r compute-peaks}
 
+all_terms_with_total <- left_join(year_counts_r, total_counts_r, by = "year")
+
+all_terms_with_total <-  all_terms_with_total |> mutate(
+  proportions = volume / total_volume
+)
+
+str(all_terms_with_total)
+
+
+all_terms_with_total <-  all_terms_with_total |> filter(grepl("^(18|19|20|21)[0-9]{2}$", term))
+
+view(all_terms_with_total)
+
+
+#All the terms with peak year and peak value
+all_terms_with_peak_year_and_peak_value <- all_terms_with_total |> filter(year >= "1850" & year <= "2012") |> group_by(term) |> 
+slice_max(order_by = proportions, n = 1, with_ties = FALSE) |> rename(peak_year = year, peak_proportion = proportions)|> 
+select(term, peak_year, peak_proportion)
+
+
+view(all_terms_with_peak_year_and_peak_value)
+
+
+
+# The three terms
+
+all_terms_with_peak_year_and_peak_value |> filter(term %in% c(1883, 1910, 1950))
+
+
+# It's the numbers but the values are rounded when they are saved in the dataframes
+
+view(years_and_total)
+years_and_total_highest_value_for_each_term <- years_and_total |> group_by(term) |> filter(proportions == max(proportions)) |> select(term, year, proportions)
+view(years_and_total_highest_value_for_each_term)
+
+
+
 ```
 
 ## Compute half-lifes
@@ -145,6 +258,28 @@ For each year term, find the year where its proportion of mentions peaks (hits i
 Now, for each year term, find the minimum number of years it takes for the proportion of mentions to decline from its peak value to half its peak value. Store this in an intermediate data frame.
 
 ```{r compute-half-lifes}
+
+
+joined_all_terms_with_peak_year_and_peak_value <- all_terms_with_total |> 
+inner_join(all_terms_with_peak_year_and_peak_value, by = "term") |> 
+filter(year > peak_year) 
+
+view(joined_all_terms_with_peak_year_and_peak_value)
+
+
+half_life_all_terms <- joined_all_terms_with_peak_year_and_peak_value |> 
+filter(proportions <= 0.5 * peak_proportion) |> 
+group_by(term) |> 
+slice_min(order_by = year, n = 1, with_ties = FALSE) |> 
+mutate(years_to_half = year - peak_year, half_year = year) |> 
+select(term, half_year, peak_year, years_to_half, peak_proportion, year)
+
+
+view(half_life_all_terms)
+
+# To view the three main years "terms"
+
+half_life_all_terms |> filter(term %in% c(1883, 1910, 1950))
 
 ```
 
@@ -155,15 +290,84 @@ Plot the half-life of each term over time from 1850 to 2012. Each point should r
 
 ```{r plot-half-lifes}
 
+half_life_all_terms <- half_life_all_terms |> mutate(highlight = ifelse(term %in% c("1883", "1910", "1950"), term, "Other"))
+
+view(half_life_all_terms)
+
+
+half_life_all_terms |> filter(term %in% c(1883, 1910, 1950))
+
+
+half_life_all_terms |> ggplot(aes(x = year, y = years_to_half, color = highlight)) + 
+geom_point(size = 4) + 
+geom_smooth(method = "loess", se = FALSE, color = "black") + 
+scale_x_continuous(limits = c(1850, 2012)) +
+scale_color_manual(values = c("1883" =  "blue", "1910" = "#034503", "1950" = "red")) +
+labs(
+  x = "Year", 
+  y = "Half-life (yrs)",
+  color = "Terms"
+)
+
 ```
 
 ## Your written answer
 
 Write up your answer to Part F here.
 
+No, they don't look the same as the graph in version 1. In version 1, there is a downward trend in the half-life years over the years. 
+The slope in version 1 is clearly negative.  
+
 # Part G
 
 > Were there any years that were outliers such as years that were forgotten particularly quickly or particularly slowly? Briefly speculate about possible reasons for that pattern and explain how you identified the outliers.
+
+Yes, there were some terms that have high half-life, which means that they were hard to be forgotten. 
+Also, there were some terms have very short half-life time closer to zero. Below is the code that shows I have identified the outliers
+
+```{r outliers}
+
+view(half_life_all_terms)
+
+str(half_life_all_terms)
+#Note about qunatile, it needs a vector to be passed not a dataframe
+Q1_half_life <- quantile(half_life_all_terms$years_to_half, 0.25)
+
+Q3_half_life <- quantile(half_life_all_terms$years_to_half, 0.75)
+
+IQR_half_life <- Q3_half_life - Q1_half_life
+
+lower_bound <- Q1_half_life - 1.5* IQR_half_life
+upper_bound <- Q3_half_life + 1.5 * IQR_half_life
+
+outliers <- half_life_all_terms |> filter(years_to_half < lower_bound | years_to_half > upper_bound)
+
+print(min(half_life_all_terms$years_to_half))
+
+min_half_life <- min(half_life_all_terms$years_to_half)
+
+terms_min_half_life <- half_life_all_terms |> filter(years_to_half == min_half_life)
+
+max_half_life <- max(half_life_all_terms$years_to_half)
+
+terms_max_half_life <- half_life_all_terms |> filter(years_to_half == max_half_life)
+
+
+#Outliers 
+
+print("Outliers: ")
+print(outliers)
+view(outliers)
+
+print("Term with the min years to half life: ")
+print(terms_min_half_life)
+
+print("Term with the max years to half life: ")
+print(terms_max_half_life)
+
+```
+
+
 
 ## Your written answer
 
@@ -172,3 +376,4 @@ Write up your answer to Part G here. Include code that shows the years with the 
 # Makefile
 
 Edit the `Makefile` in this directory to execute the full set of scripts that download the data, clean it, and produce this report. This must be turned in with your assignment such that running `make` on the command line produces the final report as a pdf file.
+
