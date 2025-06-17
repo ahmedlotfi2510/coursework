@@ -1,0 +1,83 @@
+```{r setup, include=FALSE}
+library(here)
+library(scales)
+library(tidyverse)
+library(ggplot2)
+library(modelr)
+library(lubridate)
+
+theme_set(theme_bw())
+
+knitr::opts_chunk$set(echo = TRUE)
+
+
+```
+
+
+```{r Load_data}
+trips_per_2015_day <- read_tsv('trips_per_day_2015.tsv')
+weather_2015 <- read.csv('weather_2015.csv')
+view(weather_2015)
+view(trips_per_2015_day)
+
+
+str(weather_2015)
+str(trips_per_2015_day)
+
+
+weather_2015$DATE <- ymd(weather_2015$DATE)
+
+
+trips_per_day <- inner_join(trips_per_2015_day, weather_2015, by = c("ymd" = "DATE"))
+
+view(trips_per_day)
+
+names(trips_per_day) <- tolower(names(trips_per_day))
+
+view(trips_per_day)
+
+#Manipulate the dataframe to include: weekends
+trips_per_day <- trips_per_day |> mutate(
+    day_name = weekdays(ymd),
+)
+
+trips_per_day$is_weekend <- ifelse(trips_per_day$day_name %in% c("Saturday", "Sunday"), 1, 0)
+
+trips_per_day <- trips_per_day |> mutate(
+    avg_temp = tmax - tmin,
+    avg_prcp = mean(prcp)
+)
+
+trips_per_day <- trips_per_day |> mutate(
+    month = month(ymd),
+    season = case_when(
+      month %in% c(12, 1, 2)  ~ "Winter",
+      month %in% c(3, 4, 5)   ~ "Spring",
+      month %in% c(6, 7, 8)   ~ "Summer",
+      month %in% c(9, 10, 11) ~ "Fall"
+    )
+)
+view(trips_per_day)
+
+
+trips_per_day <- trips_per_day |> select(ymd, num_trips, prcp, snow, snwd, tmax, tmin, day_name, is_weekend, avg_temp, avg_prcp, month, season)
+view(trips_per_day)
+```
+
+```{r test 2015}
+
+test_err <- c()
+
+view(trips_per_day)
+
+model <- load("Bestmodel.RData")
+
+model <- get(model)
+
+summary(model)
+test_err <- c()
+test_err <- sqrt(mean((predict(model, trips_per_day) - trips_per_day$num_trips)^2))
+test_err
+
+#test_err RMSE 214126.6
+```
